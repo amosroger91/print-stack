@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Planning & Internal Documents
+Human.txt
+planning_session.md
+*.planning.md
+.brain/
+notes/
+TODO.md
+SCRATCH.md
+
+# Test files
+*.test.local.*
+test-uploads/
+Butterfly.stl
+*.stl
+*.3mf
+*.obj
