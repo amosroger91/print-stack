@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { FileUp, Printer, Play, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { StlViewer } from './components/StlViewer';
+import { CostBreakdown } from './components/CostBreakdown';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
     return twMerge(clsx(inputs));
@@ -13,6 +15,7 @@ function App() {
     const [fileId, setFileId] = useState<string | null>(null);
     const [gcodeUrl, setGcodeUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [cost, setCost] = useState<any>(null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -73,6 +76,7 @@ function App() {
 
             const data = await res.json();
             setGcodeUrl(data.gcodeUrl);
+            setCost(data.cost);
             setStatus('completed');
         } catch (err: any) {
             console.error(err);
@@ -85,9 +89,9 @@ function App() {
         <div className="min-h-screen bg-slate-950 text-slate-50 p-8 flex flex-col items-center">
             <header className="mb-12 text-center">
                 <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text mb-4">
-                    Print Stack
+                    Auto Print
                 </h1>
-                <p className="text-slate-400">Sprint 1: Vertical Slice (File → G-Code)</p>
+                <p className="text-slate-400">Your print farms best ranch hand.</p>
             </header>
 
             <div className="w-full max-w-2xl bg-slate-900 rounded-xl border border-slate-800 p-8 shadow-2xl">
@@ -116,6 +120,23 @@ function App() {
                         </button>
                     </div>
                 </div>
+
+                {/* STL Preview - Show after upload */}
+                {status !== 'idle' && fileId && (
+                    <div className="mb-8">
+                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                            <span className="text-cyan-400">📦 3D Model Preview</span>
+                        </h3>
+                        <StlViewer
+                            fileUrl={`${API_URL}/download/${fileId}`}
+                            width={600}
+                            height={400}
+                        />
+                        <p className="text-xs text-slate-500 mt-2 text-center">
+                            💡 Click and drag to rotate • Scroll to zoom • Right-click to pan
+                        </p>
+                    </div>
+                )}
 
                 {/* Step 2: Configure & Slice */}
                 <div className={cn("mb-8 transition-opacity duration-300",
@@ -156,9 +177,16 @@ function App() {
                     </button>
                 </div>
 
-                {/* Step 3: Result */}
+                {/* Step 3: Cost Estimate */}
+                {status === 'completed' && cost && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4">
+                        <CostBreakdown cost={cost} />
+                    </div>
+                )}
+
+                {/* Step 4: Download */}
                 {status === 'completed' && gcodeUrl && (
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4">
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 mt-4">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-green-500/20 text-green-400 rounded-full">
                                 <Download size={24} />

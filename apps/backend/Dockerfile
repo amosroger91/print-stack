@@ -14,7 +14,13 @@ RUN pnpm install
 # Copy source
 COPY . .
 
-# Build
+# Copy Prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma Client before building TypeScript
+RUN pnpm exec prisma generate
+
+# Build TypeScript
 RUN pnpm --filter @print-stack/backend build
 
 # Production image
@@ -66,8 +72,15 @@ RUN pnpm install --prod
 # Copy built code
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 
+# Copy Prisma schema (client will be generated at runtime)
+COPY --from=builder /app/prisma ./prisma
+
 # Copy profiles - Crucial for Sprint 1
 COPY packages/slicer/profiles ./packages/slicer/profiles
 
+# Copy entrypoint script
+COPY apps/backend/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3000
-CMD ["node", "apps/backend/dist/index.js"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]

@@ -4,11 +4,15 @@ import multipart from '@fastify/multipart';
 import * as Minio from 'minio';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { PrismaClient } from '@prisma/client';
+import { GcodeAnalyzer } from './services/gcodeAnalyzer';
+import { CostCalculator } from './services/costCalculator';
 // import { slice } from '@print-stack/slicer'; // We would need to properly link this or run as separate service
 // For Sprint 1 "Vertical Slice", we will exec the slicer locally if running in same container, 
 // OR simpler: just implement the logic here for now to prove it works, then refactor.
 
 const server = Fastify({ logger: true });
+const prisma = new PrismaClient();
 
 // MinIO Client
 const minioClient = new Minio.Client({
@@ -91,18 +95,39 @@ server.post('/slice', async (req: FastifyRequest<{ Body: { fileId?: string, obje
 
         await execAsync(cmd);
 
-        // 3. Upload GCode to MinIO
+        // 3. Analyze G-code for cost calculation
+        const gcodeContent = fs.readFileSync(tempOutput, 'utf-8');
+        const analysis = GcodeAnalyzer.parse(gcodeContent);
+
+        const costCalculator = new CostCalculator(prisma);
+        const costBreakdown = await costCalculator.calculate(
+            printerId,
+            'PLA', // Default material, could be from profile
+            analysis.filamentUsedGrams,
+            analysis.printTimeSeconds,
+            analysis.estimatedKWh
+        );
+
+        // 4. Upload GCode to MinIO
         const gcodeFilename = `${minioKey}.gcode`;
         await minioClient.fPutObject(BUCKET_NAME, gcodeFilename, tempOutput);
 
-        // 4. Cleanup temp files
+        // 5. Cleanup temp files
         fs.unlinkSync(tempInput);
         fs.unlinkSync(tempOutput);
 
-        // 5. Return backend download URL instead of presigned MinIO URL
+        // 6. Return backend download URL with cost info
         const downloadUrl = `http://localhost:3000/download/${gcodeFilename}`;
 
-        return { status: 'completed', gcodeUrl: downloadUrl };
+        return {
+            status: 'completed',
+            gcodeUrl: downloadUrl,
+            cost: {
+                filamentGrams: analysis.filamentUsedGrams,
+                printTimeSeconds: analysis.printTimeSeconds,
+                ...costBreakdown
+            }
+        };
 
     } catch (err: any) {
         req.log.error(err);

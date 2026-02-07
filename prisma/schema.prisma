@@ -1,0 +1,136 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Track all uploaded STL/3MF/OBJ files
+model UploadedFile {
+  id          String   @id @default(uuid())
+  filename    String   // Original filename
+  objectName  String   @unique // MinIO object key
+  fileSize    BigInt   // File size in bytes
+  sha256Hash  String?  // For deduplication
+  uploadedAt  DateTime @default(now())
+  
+  jobs        Job[]    // Files can be sliced multiple times
+
+  @@map("uploaded_files")
+}
+
+// Slicer profile configurations (versioned)
+model SlicerProfile {
+  id             String   @id @default(uuid())
+  name           String   // e.g., "Ender 3 V3 SE - Standard"
+  printerId      String   // e.g., "Ender3V3SE"
+  profileId      String   // e.g., "simple"
+  configFilePath String   // Path to .ini file
+  version        Int      @default(1)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  
+  jobs           Job[]
+
+  @@unique([printerId, profileId, version])
+  @@map("slicer_profiles")
+}
+
+// Slicing job tracking
+model Job {
+  id              String         @id @default(uuid())
+  status          JobStatus      @default(PENDING)
+  progress        Int            @default(0) // 0-100
+  
+  // References
+  uploadedFileId  String
+  uploadedFile    UploadedFile   @relation(fields: [uploadedFileId], references: [id])
+  
+  profileId       String
+  profile         SlicerProfile  @relation(fields: [profileId], references: [id])
+  
+  // Results
+  gcodeObjectName String?        // MinIO key for generated G-code
+  errorMessage    String?        // Error details if failed
+  
+  // Timestamps
+  createdAt       DateTime       @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  @@index([createdAt])
+  @@map("jobs")
+
+  cost            JobCost?
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model JobCost {
+  id                String   @id @default(uuid())
+  jobId             String   @unique
+  job               Job      @relation(fields: [jobId], references: [id])
+  
+  // Material
+  filamentUsedGrams Float
+  materialType      String   @default("PLA")
+  materialCost      Float
+  
+  // Time & Energy
+  printTimeSeconds  Int
+  electricityCost   Float
+  machineCost       Float
+  
+  // Total
+  totalCost         Float
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("job_costs")
+}
+
+model MaterialCost {
+  id            String   @id @default(uuid())
+  materialType  String   @unique // "PLA", "PETG", etc.
+  pricePerKg    Float
+  density       Float    // g/cm³
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("material_costs")
+}
+
+model PrinterEconomy {
+  id                String   @id @default(uuid())
+  printerId         String   @unique
+  electricityRate   Float    @default(0.12)  // $/kWh
+  machineHourlyRate Float    @default(1.00)  // $/hour
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("printer_economy")
+}
+
+model PricingConfig {
+  id              String   @id @default(uuid())
+  name            String   @unique @default("default")
+  flatFee         Float    @default(0.00)    // Flat fee added to each job
+  markupPercent   Float    @default(40.00)   // Percentage markup (e.g., 40 for 40%)
+  applyFlatFee    Boolean  @default(false)   // Whether to apply flat fee
+  applyMarkup     Boolean  @default(true)    // Whether to apply percentage markup
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("pricing_config")
+}

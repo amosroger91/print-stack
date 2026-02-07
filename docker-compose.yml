@@ -44,8 +44,10 @@ services:
       - postgres
       - redis
       - minio
+    env_file:
+      - .env
     environment:
-      MINIO_ENDPOINT: minio
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/print_stack?schema=public
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-password123}
 
